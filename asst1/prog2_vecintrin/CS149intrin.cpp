@@ -248,6 +248,9 @@ void _cs149_interleave(__cs149_vec<T> &vecResult, __cs149_vec<T> &vec) {
   for (int i=0; i<VECTOR_WIDTH; i++) {
     int index = i < VECTOR_WIDTH/2 ? (2 * i) : (2 * (i - VECTOR_WIDTH/2) + 1);
     vecResult.value[i] = vec.value[index];
+    //0 0 1 2 2 1 3 3
+    //0 0 1 2 2 4 3 6  4 1 5 3 6 5 7 7
+
   }
 }
 

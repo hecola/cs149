@@ -334,15 +334,37 @@ float arraySumSerial(float* values, int N) {
 // You can assume N is a multiple of VECTOR_WIDTH
 // You can assume VECTOR_WIDTH is a power of 2
 float arraySumVector(float* values, int N) {
-  
+
   //
   // CS149 STUDENTS TODO: Implement your vectorized version of arraySumSerial here
   //
-  
-  for (int i=0; i<N; i+=VECTOR_WIDTH) {
+  // there is a lot of duplicated computing operation in hadd and the interleave,
+  // I don't understand why we need extra computiong, I think we just need to the former half
+  // from VECTOR_WIDTH to VECTOR_WIDTH/2, and VECTOR_WIDTH/2/2 and so on to 1
+  __cs149_vec_float vec, vecResult;
+  __cs149_mask maskAll = _cs149_init_ones();
+  float sum = 0.0f;
 
+  // Step 1: Process chunks of VECTOR_WIDTH
+  int i = 0;
+  for (; i + VECTOR_WIDTH <= N; i += VECTOR_WIDTH)
+  {
+    // Load VECTOR_WIDTH elements into the vector
+    _cs149_vload_float(vec, values + i, maskAll);
+
+    // Perform horizontal addition until one value remains
+    int width = VECTOR_WIDTH; // Start with the full vector width
+    while (width > 1)
+    {
+      _cs149_hadd_float(vecResult, vec); // Horizontally add adjacent elements
+      _cs149_interleave_float(vec, vecResult); // Rearrange for next addition
+      width /= 2;                        // Reduce the effective width by half
+    }
+
+    // Add the result of this vector to the total sum
+    sum += vec.value[0]; // The final result is in the first element
   }
 
-  return 0.0;
+  return sum;
 }
 
