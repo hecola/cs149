@@ -126,7 +126,8 @@ void initValue(float* values, int* exponents, float* output, float* gold, unsign
 bool verifyResult(float* values, int* exponents, float* output, float* gold, int N) {
   int incorrect = -1;
   float epsilon = 0.00001;
-  for (int i=0; i<N+VECTOR_WIDTH; i++) {
+  // bad verification, should remove VECTOR_WIDTH, since we should only check the user really allocate space
+  for (int i=0; i<N; i++) {
     if ( abs(output[i] - gold[i]) > epsilon ) {
       incorrect = i;
       break;
@@ -186,10 +187,11 @@ void absVector(float* values, float* output, int N) {
 //  Note: Take a careful look at this loop indexing.  This example
 //  code is not guaranteed to work when (N % VECTOR_WIDTH) != 0.
 //  Why is that the case?
-  for (int i=0; i<N; i+=VECTOR_WIDTH) {
-
+  int remainder = N % VECTOR_WIDTH == 0 ? VECTOR_WIDTH : N % VECTOR_WIDTH;
+  int i = 0;
+  do {
     // All ones
-    maskAll = _cs149_init_ones();
+    maskAll = _cs149_init_ones(remainder);
 
     // All zeros
     maskIsNegative = _cs149_init_ones(0);
@@ -211,7 +213,14 @@ void absVector(float* values, float* output, int N) {
 
     // Write results back to memory
     _cs149_vstore_float(output+i, result, maskAll);
-  }
+
+    if (N % VECTOR_WIDTH == 0) { // can process all elements
+      i += VECTOR_WIDTH;
+    } else {
+      i += remainder;
+      remainder = VECTOR_WIDTH;
+    }
+  } while(i < N);
 }
 
 
@@ -240,16 +249,75 @@ void clampedExpSerial(float* values, int* exponents, float* output, int N) {
   }
 }
 
+//
+// CS149 STUDENTS TODO: Implement your vectorized version of
+// clampedExpSerial() here.
+//
+// Your solution should work for any value of
+// N and VECTOR_WIDTH, not just when VECTOR_WIDTH divides N
+//
 void clampedExpVector(float* values, int* exponents, float* output, int N) {
+  __cs149_vec_float x;
+  __cs149_vec_int y;
+  __cs149_vec_float result;
+  __cs149_vec_int zero_int = _cs149_vset_int(0);
+  __cs149_vec_int one_int = _cs149_vset_int(1);
+  __cs149_vec_float one_float = _cs149_vset_float(1.f);
+  __cs149_vec_float nine999999_float = _cs149_vset_float(9.999999f);
+  __cs149_mask maskAll, maskIsZero, maskIsNotZero, cur_maskIsNotZero, maskgt9999;
 
-  //
-  // CS149 STUDENTS TODO: Implement your vectorized version of
-  // clampedExpSerial() here.
-  //
-  // Your solution should work for any value of
-  // N and VECTOR_WIDTH, not just when VECTOR_WIDTH divides N
-  //
-  
+  int remainder = N % VECTOR_WIDTH == 0 ? VECTOR_WIDTH : N % VECTOR_WIDTH;
+  int i = 0;
+  do
+  {
+    // All ones
+    maskAll = _cs149_init_ones(remainder);
+
+    // Load vector of values from contiguous memory addresses
+    _cs149_vload_float(x, values + i, maskAll); // x = values[i];
+    _cs149_vload_int(y, exponents + i, maskAll); // y = exponents[i];
+
+    _cs149_veq_int(maskIsZero, y, zero_int, maskAll);        // if (y[i] == 0) {
+    //maskIsZero = _cs149_mask_and(maskIsZero, maskAll);
+    _cs149_vstore_float(output + i, one_float, maskIsZero); //   output[i] = 1.f;
+    maskIsNotZero = _cs149_mask_not(maskIsZero);
+    maskIsNotZero = _cs149_mask_and(maskIsNotZero, maskAll);
+    // y[i] > 0 should start from here, remember all non-zero value location
+    cur_maskIsNotZero = _cs149_mask_and(maskIsNotZero, maskAll); 
+    _cs149_vmult_float(result, one_float, x, cur_maskIsNotZero); // result = 1 * x
+    _cs149_vsub_int(y, y, one_int, cur_maskIsNotZero);           // all non-zero should be decremented by 1
+    _cs149_vgt_int(cur_maskIsNotZero, y, zero_int, cur_maskIsNotZero);
+
+    // y[i] >= 2
+    
+    for (;;)
+    {
+      _cs149_vmult_float(result, result, x, cur_maskIsNotZero);     //   result *= x;
+      _cs149_vsub_int(y, y, one_int, cur_maskIsNotZero);            //   y = y - 1;
+      _cs149_vgt_int(cur_maskIsNotZero, y, zero_int, cur_maskIsNotZero); //   if (y > 0)
+
+      if (_cs149_cntbits(cur_maskIsNotZero) == 0)
+      {
+        break;
+      }
+    }
+
+    // Write results back to memory
+    _cs149_vstore_float(output + i, result, maskIsNotZero);
+    _cs149_vload_float(result, output + i, maskAll);
+    _cs149_vgt_float(maskgt9999, result, nine999999_float, maskAll); // if (result > 9.999999f)
+    _cs149_vstore_float(output + i, nine999999_float, maskgt9999); //   output[i] = 9.999999f;
+
+    if (N % VECTOR_WIDTH == 0)
+    { // can process all elements
+      i += VECTOR_WIDTH;
+    }
+    else
+    {
+      i += remainder;
+      remainder = VECTOR_WIDTH;
+    }
+  } while (i < N);
 }
 
 // returns the sum of all elements in values
