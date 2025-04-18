@@ -10,7 +10,7 @@ results are from executing which are different in every try due to machine perfo
 This task is mainly used to understand the usage of simd and multicore
 1. launch distributes work across multiple CPU cores.
 2. foreach maps iterations to SIMD lanes within a single core (CPU thread)
-
+3. eventhough the number of physical core is 16, but if I launch more than 16 cores, the performance could enhance more to 32 times at most.
 ## Why not have just foreach handle everything? -GPT4o generated
 In theory, it might sound ideal if foreach handled both.
 
