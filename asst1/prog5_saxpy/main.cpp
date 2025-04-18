@@ -30,8 +30,8 @@ using namespace ispc;
 
 
 int main() {
-
-    const unsigned int N = 20 * 1000 * 1000; // 20 M element vectors (~80 MB)
+    // original is 20, make it 80 to own a stable performance
+    const unsigned int N = 80 * 1000 * 1000; // 80 M element vectors (~(80 * 4) MB)
     const unsigned int TOTAL_BYTES = 4 * N * sizeof(float);
     const unsigned int TOTAL_FLOPS = 2 * N;
 
