@@ -20,4 +20,4 @@ This way can decrease the speed up from multicore
 
 1. The imbalance within a simd instruction can influence the speedup of ispc without task
 2. the input value is closer to 1 the smaller overall speedup we have. This also apply to the boundary value(0, 3), namely if it is closer to the boundary value, the speedup could be bigger. 
-3. 
+3. Write your own version of the sqrt function manually using AVX2 intrinsics(to be done)
