@@ -87,14 +87,11 @@ int main() {
   double *clusterCentroids;
   int *clusterAssignments;
 
-  // NOTE: we will grade your submission using the data in data.dat
-  // which is read by this function
-  readData("./data.dat", &data, &clusterCentroids, &clusterAssignments, &M, &N,
-           &K, &epsilon);
 
-  // NOTE: if you want to generate your own data (for fun), you can use the
+
+  /*// NOTE: if you want to generate your own data (for fun), you can use the
   // below code
-  /*
+
   M = 1e6;
   N = 100;
   K = 3;
@@ -123,10 +120,14 @@ int main() {
   }
 
   // Uncomment to generate data file
-  // writeData("./data.dat", data, clusterCentroids, clusterAssignments, &M, &N,
-  //           &K, &epsilon);
-  */
+  writeData("./data.dat", data, clusterCentroids, clusterAssignments, &M, &N,
+             &K, &epsilon);*/
 
+
+  // NOTE: we will grade your submission using the data in data.dat
+  // which is read by this function
+  readData("../data.dat", &data, &clusterCentroids, &clusterAssignments, &M, &N,
+           &K, &epsilon);
   printf("Running K-means with: M=%d, N=%d, K=%d, epsilon=%f\n", M, N,
          K, epsilon);
 

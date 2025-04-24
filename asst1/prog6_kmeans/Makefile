@@ -1,5 +1,6 @@
 CXX=g++ -m64 -march=native
-CXXFLAGS=-I../common -Iobjs/ -O3 -Wall
+CXXFLAGS=-I../common -Iobjs/ -g -O3 -Wall
+##-fsanitize=thread
 
 
 APP_NAME=kmeans
