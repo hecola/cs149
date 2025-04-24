@@ -1,5 +1,5 @@
 CXX=g++ -m64 -march=native
-CXXFLAGS=-I../common -Iobjs/ -g -O3 -Wall
+CXXFLAGS=-I../common -Iobjs/ -g -Wall -mavx2 -mfma
 ##-fsanitize=thread
 
 

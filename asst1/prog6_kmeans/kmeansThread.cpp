@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <thread>
-#include <mutex>
+#include <immintrin.h>
 
 #include "CycleTimer.h"
 
@@ -12,13 +12,14 @@ using namespace std;
 typedef struct {
   // Control work assignments
   int start, end;
-
+  int M, N, K;
   // Shared by all functions
   double *data;
   double *clusterCentroids;
   int *clusterAssignments;
   double *currCost;
-  int M, N, K, step, startK, endK, startM, endM, threadID;
+  // for threads
+  int step, startK, endK, startM, endM, threadID;
   void* temp; // for computeAssignments_bythread
   int *thread_counts; //for computeCentroids_bythread
   double *thread_centroids; // for computeCentroids
@@ -61,10 +62,21 @@ static bool stoppingConditionMet(double *prevCost, double *currCost,
  */
 double dist(double *x, double *y, int nDim) {
   double accum = 0.0;
-  for (int i = 0; i < nDim; i++) {
-    accum += pow((x[i] - y[i]), 2);
+  __m256d va = _mm256_setr_pd(0.0, 0.0, 0.0, 0.0);
+  __m256d vb = _mm256_setr_pd(0.0, 0.0, 0.0, 0.0);
+  __m256d vc = _mm256_setr_pd(0.0, 0.0, 0.0, 0.0);
+  __m256d result = _mm256_setr_pd(0.0, 0.0, 0.0, 0.0);
+  for (int i = 0; i < nDim; i+=4) {
+    va = _mm256_loadu_pd(&x[i]);
+    vb = _mm256_loadu_pd(&y[i]);
+    result = _mm256_sub_pd(va, vb);
+    vc = _mm256_fmadd_pd(result, result, vc); // FMA
   }
-  return sqrt(accum);
+  __m128d low = _mm256_extractf128_pd(vc, 0);
+  __m128d high = _mm256_extractf128_pd(vc, 1);
+  __m128d sum128 = _mm_add_pd(low, high);
+  sum128 = _mm_hadd_pd(sum128, sum128);
+  return sqrt(_mm_cvtsd_f64(sum128));
 }
 
 void computeAssignments_bythread(WorkerArgs *const args) {
@@ -77,25 +89,22 @@ void computeAssignments_bythread(WorkerArgs *const args) {
   int endK = args->endK;
   int step = args->step;  
   double *minDist = (double*)args->temp;
-  // Initialize arrays
-  for (int m = startM; m < endM; m++)
-  {
-    //printf("%d \n", m);
-    minDist[m] = 1e30;
-
-    args->clusterAssignments[m] = -1;
-  }
+  double *data = args->data;
+  double *clusterCentroids = args->clusterCentroids;
+  int *clusterAssignments = args->clusterAssignments;
   // Assign datapoints to closest centroids
   for (int m = startM; m < endM; m++)
   {
+    // initialize arrays
+    minDist[m] = 1e30;
+    //args->clusterAssignments[m] = -1;
     for (int k = startK; k < endK; k++)
     {
-      double d = dist(&args->data[m * N],
-                      &args->clusterCentroids[k * N], N);
+      double d = dist(&data[m * N], &clusterCentroids[k * N], N);
       if (d < minDist[m])
       {
         minDist[m] = d;
-        args->clusterAssignments[m] = k;
+        clusterAssignments[m] = k;
       }
     }
   }
@@ -110,13 +119,22 @@ void computeCentroids_bythread(WorkerArgs *const args) {
   int endM = args->endM;
   int N = args->N;
   int K = args->K;
+  double *data = args->data;
+  int *clusterAssignments = args->clusterAssignments;
+  double *thread_centroids = args->thread_centroids;
 
   // Sum up contributions from assigned examples
+  __m256d vec_x = _mm256_setr_pd(0.0, 0.0, 0.0, 0.0);
+  __m256d vec_y = _mm256_setr_pd(0.0, 0.0, 0.0, 0.0);
+  __m256d vec_z = _mm256_setr_pd(0.0, 0.0, 0.0, 0.0);
   for (int m = startM; m < endM; m++)
   {
-    int k = args->clusterAssignments[m];
-    for (int n = 0; n < N; n++) {
-      args->thread_centroids[k * N + n] += args->data[m * N + n];
+    int k = clusterAssignments[m];
+    for (int n = 0; n < N; n+=4) {
+      int index = k * N + n;
+      vec_x = _mm256_loadu_pd(thread_centroids + index);
+      vec_y = _mm256_loadu_pd(data + (m * N + n));
+      _mm256_storeu_pd(thread_centroids + index, _mm256_add_pd(vec_x, vec_y));
     }
     args->thread_counts[k]++;
   }
@@ -130,10 +148,14 @@ void computeCost(WorkerArgs *const args) {
   int endM = args->endM;
   int M = args->M;
   int N = args->N;
+  double *data = args->data;
+  int *clusterAssignments = args->clusterAssignments;
+  double *clusterCentroids = args->clusterCentroids;
+  double *thread_accum = args->thread_accum;
   // Sum cost for all data points assigned to centroid
   for (int m = startM; m < endM; m++) {
-    int k = args->clusterAssignments[m];
-    args->thread_accum[k] += dist(&args->data[m * N], &args->clusterCentroids[k * N], N);
+    int k = clusterAssignments[m];
+    thread_accum[k] += dist(&data[m * N], &clusterCentroids[k * N], N);
   }
 }
 
@@ -284,14 +306,15 @@ void kMeansThread(double *data, double *clusterCentroids, int *clusterAssignment
 
   // The WorkerArgs array is used to pass inputs to and return output from
   // functions.
-  WorkerArgs args;
-  args.data = data;
-  args.clusterCentroids = clusterCentroids;
-  args.clusterAssignments = clusterAssignments;
-  args.currCost = currCost;
-  args.M = M;
-  args.N = N;
-  args.K = K;
+  WorkerArgs args{
+      .M = M,
+      .N = N,
+      .K = K,
+      .data = data,
+      .clusterCentroids = clusterCentroids,
+      .clusterAssignments = clusterAssignments,
+      .currCost = currCost,
+  };
 
   // Initialize arrays to track cost
   for (int k = 0; k < K; k++) {
