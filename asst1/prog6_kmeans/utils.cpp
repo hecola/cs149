@@ -2,7 +2,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <string>
-
+#include <mm_malloc.h> //redundant
 using namespace std;
 
 void logToFile(string filename, double sampleRate, double *data,
@@ -77,8 +77,8 @@ void readData(string filename, double **data, double **clusterCentroids,
   int N = *N_p;
   int K = *K_p;
 
-  *data = new double[M * N];
-  *clusterCentroids = new double[K * N];
+  *data = (double *)_mm_malloc(M * N * sizeof(double), 64);
+  *clusterCentroids = (double *)_mm_malloc(K * N * sizeof(double), 32);
   *clusterAssignments = new int[M];
 
   dataFile.read((char *)*data, sizeof(double) * M * N);
